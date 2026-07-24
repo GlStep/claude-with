@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/glstep/claude-with/internal/config"
@@ -13,6 +14,9 @@ import (
 var version = "dev"
 
 func Run(args []string) int {
+	var dryRun bool
+	dryRun, args = extractFlag(args, "--dry-run")
+
 	cfg, err := loadConfig()
 	if err != nil {
 		errMsg("loading config: %v", err)
@@ -50,8 +54,24 @@ func Run(args []string) int {
 
 	claudeBin := "claude"
 
-	baseEnv := os.Environ()
+	if dryRun {
+		emptyEnv := []string(nil)
+		partEnv := wrapper.BuildEnv(emptyEnv, profile)
 
+		fmt.Println("Dry run mode. The following command would be executed:")
+		fmt.Printf("Command: %s %v\n", claudeBin, args)
+		fmt.Println("Environment variables:")
+		for _, env := range partEnv {
+			if strings.HasPrefix(env, "ANTHROPIC_API_KEY=") {
+				fmt.Println("  " + "ANTHROPIC_API_KEY=<REDACTED>")
+			} else {
+				fmt.Println("  " + env)
+			}
+		}
+		return 0
+	}
+
+	baseEnv := os.Environ()
 	fullEnv := wrapper.BuildEnv(baseEnv, profile)
 
 	exitCode, err := wrapper.Run(claudeBin, args, fullEnv)
@@ -69,6 +89,15 @@ func loadConfig() (*config.Config, error) {
 		return nil, err
 	}
 	return config.Load(path)
+}
+
+func extractFlag(args []string, flag string) (bool, []string) {
+	for i, arg := range args {
+		if arg == flag {
+			return true, append(args[:i], args[i+1:]...)
+		}
+	}
+	return false, args
 }
 
 func printProfiles(cfg *config.Config) {
