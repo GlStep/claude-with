@@ -145,7 +145,8 @@ func printHelp() {
 
 	fmt.Println()
 	fmt.Println("Examples:")
-	fmt.Println("  ccw local --chat \"hi\"")
+	fmt.Println("  ccw local \"hi\"")
+	fmt.Println("  ccw local -p \"hi\"")
 	fmt.Println("  ccw")
 }
 

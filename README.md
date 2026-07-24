@@ -4,8 +4,8 @@
 
 You define named **profiles** in a TOML config file — each one sets `ANTHROPIC_BASE_URL`, `ANTHROPIC_MODEL`, and `ANTHROPIC_API_KEY` — and `ccw` launches `claude` with the right environment for whichever profile you pick.
 
-```
-ccw local chat "hi"
+```sh
+ccw local "hi"
 ```
 
 ## Installation
@@ -31,7 +31,7 @@ go build -o ccw ./cmd/ccw
 ```sh
 ccw init          # create a starter config file
 ccw --list        # see the profiles you have
-ccw local chat "hi"   # run `claude chat "hi"` using the "local" profile's env
+ccw local "hi"     # run `claude "hi"` using the "local" profile's env
 ```
 
 ## Configuration
@@ -64,20 +64,20 @@ SOME_OTHER_VAR = "value"
 
 #### Top-level keys
 
-| Key               | Description                                                          |
-| ----------------- | ---------------------------------------------------------------------|
-| `default_profile` | Name of the profile to use when none is given on the command line.   |
-| `[profiles.NAME]` | One table per profile; `NAME` is what you pass on the command line.  |
+| Key | Description |
+| --- | --- |
+| `default_profile` | Name of the profile to use when none is given on the command line. |
+| `[profiles.NAME]` | One table per profile; `NAME` is what you pass on the command line. |
 
 #### Profile keys
 
-| Key           | Maps to              | Description                                                                 |
-| ------------- | --------------------- | ---------------------------------------------------------------------------|
-| `base_url`    | `ANTHROPIC_BASE_URL`  | The endpoint `claude` should talk to.                                      |
-| `model`       | `ANTHROPIC_MODEL`     | The model name to request.                                                 |
-| `api_key`     | `ANTHROPIC_API_KEY`   | The API key, stored directly in the file. **See the warning below.**       |
-| `api_key_env` | `ANTHROPIC_API_KEY`   | Name of an environment variable to read the API key from at runtime.       |
-| `env`         | *(arbitrary)*         | A table of extra `NAME = "value"` env vars to set, for anything else you need. |
+| Key | Maps to | Description |
+| --- | --- | --- |
+| `base_url` | `ANTHROPIC_BASE_URL` | The endpoint `claude` should talk to. |
+| `model` | `ANTHROPIC_MODEL` | The model name to request. |
+| `api_key` | `ANTHROPIC_API_KEY` | The API key, stored directly in the file. **See the warning below.** |
+| `api_key_env` | `ANTHROPIC_API_KEY` | Name of an environment variable to read the API key from at runtime. |
+| `env` | *(arbitrary)* | A table of extra `NAME = "value"` env vars to set, for anything else you need. |
 
 If both `api_key` and `api_key_env` are set, `api_key_env` wins.
 
@@ -85,35 +85,38 @@ If both `api_key` and `api_key_env` are set, `api_key_env` wins.
 
 ## Usage
 
-```
+```text
 ccw [profile_name] [args...]
 ```
 
 - `profile_name` — which profile to use. If omitted, `default_profile` from the config is used.
-- `args...` — everything else is forwarded as-is to the `claude` binary.
+- `args...` — everything else is forwarded as-is to the `claude` binary (e.g. a prompt, or `claude`'s own flags like `-p`).
 
 ### Commands and flags
 
-| Flag / command    | Description                                                              |
-| ------------------ | ------------------------------------------------------------------------|
-| `[profile_name]`   | The profile to use. Defaults to `default_profile` in config if omitted. |
-| `--help`, `-h`      | Show the help message.                                                  |
-| `--version`, `-v`   | Show the `ccw` version.                                                 |
-| `--list`, `-l`      | List all available profiles.                                            |
-| `--dry-run`         | Print the resolved command and env vars without actually running `claude`. Can appear anywhere in the arguments. |
-| `init`              | Create a starter config file. See below.                                |
+| Flag / command | Description |
+| --- | --- |
+| `[profile_name]` | The profile to use. Defaults to `default_profile` in config if omitted. |
+| `--help`, `-h` | Show the help message. |
+| `--version`, `-v` | Show the `ccw` version. |
+| `--list`, `-l` | List all available profiles. |
+| `--dry-run` | Print the resolved command and env vars without actually running `claude`. Can appear anywhere in the arguments. |
+| `init` | Create a starter config file. See below. |
 
 ### Examples
 
 ```sh
-# Use the default profile
+# Use the default profile, one-shot prompt
+ccw local "hi there"
+
+# Use the default profile explicitly
 ccw
 
-# Use a specific profile and pass args through to claude
-ccw local chat "hi there"
+# Non-interactive (print) mode, forwarded straight to claude
+ccw local -p "hi there"
 
 # See what would happen without actually launching claude
-ccw --dry-run local chat "hi there"
+ccw --dry-run local "hi there"
 
 # List configured profiles
 ccw --list
@@ -137,9 +140,9 @@ ccw init --help      # show init-specific help
 Resolves the profile and prints the command and environment variables that would be used, then exits without launching `claude`. Any `ANTHROPIC_API_KEY` value is redacted in the output, so it's safe to share.
 
 ```sh
-$ ccw --dry-run local chat "hi"
+$ ccw --dry-run local "hi"
 Dry run mode. The following command would be executed:
-Command: claude [chat hi]
+Command: claude [hi]
 Environment variables:
   ANTHROPIC_BASE_URL=http://localhost:11434/v1
   ANTHROPIC_MODEL=llama3.1
