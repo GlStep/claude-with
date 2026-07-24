@@ -3,7 +3,9 @@ package cli
 import (
 	"fmt"
 	"os"
+	"runtime/debug"
 	"sort"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 
@@ -11,14 +13,27 @@ import (
 	"github.com/glstep/claude-with/internal/wrapper"
 )
 
+// version is overridden at release time via
+// -ldflags "-X github.com/glstep/claude-with/internal/cli.version=v1.2.3".
 var version = "dev"
 
 func Run(args []string) int {
 	var dryRun bool
 	dryRun, args = extractFlag(args, "--dry-run")
 
-	if len(args) > 0 && args[0] == "init" {
-		return runInit(args[1:])
+	// Handle everything that doesn't need a config file before loading it,
+	// so --help and --version work on a fresh install.
+	if len(args) > 0 {
+		switch args[0] {
+		case "init":
+			return runInit(args[1:], dryRun)
+		case "--help", "-h":
+			printHelp()
+			return 0
+		case "--version", "-v":
+			printVersion()
+			return 0
+		}
 	}
 
 	cfg, err := loadConfig()
@@ -27,21 +42,9 @@ func Run(args []string) int {
 		return 1
 	}
 
-	if len(args) > 0 {
-		if args[0] == "--help" || args[0] == "-h" {
-			printHelp()
-			return 0
-		}
-
-		if args[0] == "--list" || args[0] == "-l" {
-			printProfiles(cfg)
-			return 0
-		}
-
-		if args[0] == "--version" || args[0] == "-v" {
-			printVersion()
-			return 0
-		}
+	if len(args) > 0 && (args[0] == "--list" || args[0] == "-l") {
+		printProfiles(cfg)
+		return 0
 	}
 
 	profileName := ""
@@ -63,14 +66,10 @@ func Run(args []string) int {
 		partEnv := wrapper.BuildEnv(emptyEnv, profile)
 
 		fmt.Println("Dry run mode. The following command would be executed:")
-		fmt.Printf("Command: %s %v\n", claudeBin, args)
+		fmt.Println("Command: " + formatCommand(claudeBin, args))
 		fmt.Println("Environment variables:")
 		for _, env := range partEnv {
-			if strings.HasPrefix(env, "ANTHROPIC_API_KEY=") {
-				fmt.Println("  " + "ANTHROPIC_API_KEY=<REDACTED>")
-			} else {
-				fmt.Println("  " + env)
-			}
+			fmt.Println("  " + redactEnv(env))
 		}
 		return 0
 	}
@@ -98,7 +97,10 @@ func loadConfig() (*config.Config, error) {
 func extractFlag(args []string, flag string) (bool, []string) {
 	for i, arg := range args {
 		if arg == flag {
-			return true, append(args[:i], args[i+1:]...)
+			rest := make([]string, 0, len(args)-1)
+			rest = append(rest, args[:i]...)
+			rest = append(rest, args[i+1:]...)
+			return true, rest
 		}
 	}
 	return false, args
@@ -139,7 +141,7 @@ func printHelp() {
 	fmt.Fprintln(w, "  --help, -h\tShow this help message.")
 	fmt.Fprintln(w, "  --version, -v\tShow the version of ccw.")
 	fmt.Fprintln(w, "  --list, -l\tList all available profiles.")
-	fmt.Fprintln(w, "  --dry-run\tPrint the resolved command and env vars without running claude.")
+	fmt.Fprintln(w, "  --dry-run\tPrint what would happen without doing it (works with init too).")
 	fmt.Fprintln(w, "  init\tCreate a starter config file.")
 	w.Flush()
 
@@ -151,7 +153,47 @@ func printHelp() {
 }
 
 func printVersion() {
-	fmt.Printf("ccw version %s\n", version)
+	v := version
+	if v == "dev" {
+		// Not a release build; fall back to the module version stamped by
+		// `go install github.com/glstep/claude-with/cmd/ccw@vX.Y.Z`.
+		if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
+			v = info.Main.Version
+		}
+	}
+	fmt.Printf("ccw version %s\n", v)
+}
+
+// formatCommand renders a command line for display, quoting only the
+// arguments that need it.
+func formatCommand(bin string, args []string) string {
+	parts := []string{bin}
+	for _, a := range args {
+		if a == "" || strings.ContainsAny(a, " \t\"'") {
+			a = strconv.Quote(a)
+		}
+		parts = append(parts, a)
+	}
+	return strings.Join(parts, " ")
+}
+
+// sensitiveEnvFragments marks env-var names whose values must not appear in
+// dry-run output. Matched case-insensitively against the variable name, so it
+// also covers user-defined vars from the [profiles.NAME.env] table.
+var sensitiveEnvFragments = []string{"KEY", "TOKEN", "SECRET", "PASSWORD"}
+
+func redactEnv(entry string) string {
+	name, _, ok := strings.Cut(entry, "=")
+	if !ok {
+		return entry
+	}
+	upper := strings.ToUpper(name)
+	for _, frag := range sensitiveEnvFragments {
+		if strings.Contains(upper, frag) {
+			return name + "=<REDACTED>"
+		}
+	}
+	return entry
 }
 
 func errMsg(format string, args ...any) {

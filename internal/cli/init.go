@@ -18,23 +18,25 @@ model = "llama3.1"
 # api_key = "sk-..."              # avoid this if you plan to commit this file
 `
 
-func runInit(args []string) int {
+func runInit(args []string, dryRun bool) int {
+	force := false
+	for _, arg := range args {
+		switch arg {
+		case "--help", "-h":
+			printInitHelp()
+			return 0
+		case "--force", "-f":
+			force = true
+		default:
+			errMsg("init: unknown argument %q (see `ccw init --help`)", arg)
+			return 1
+		}
+	}
+
 	path, err := config.Path()
 	if err != nil {
 		errMsg("getting config path: %v", err)
 		return 1
-	}
-
-	force := false
-	if len(args) > 0 {
-		if args[0] == "--help" || args[0] == "-h" {
-			printInitHelp()
-			return 0
-		}
-
-		if args[0] == "--force" || args[0] == "-f" {
-			force = true
-		}
 	}
 
 	if !force {
@@ -42,6 +44,11 @@ func runInit(args []string) int {
 			errMsg("config already exists at %s (use --force to overwrite)", path)
 			return 1
 		}
+	}
+
+	if dryRun {
+		fmt.Printf("Dry run mode. Would create config at %s with contents:\n\n%s", path, configTemplate)
+		return 0
 	}
 
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -65,5 +72,6 @@ func printInitHelp() {
 	w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
 	fmt.Fprintln(w, "  -h, --help\tShow this help message")
 	fmt.Fprintln(w, "  -f, --force\tForce initialization even if config already exists")
+	fmt.Fprintln(w, "  --dry-run\tShow what would be written without creating the file")
 	w.Flush()
 }
