@@ -17,6 +17,10 @@ func Run(args []string) int {
 	var dryRun bool
 	dryRun, args = extractFlag(args, "--dry-run")
 
+	if len(args) > 0 && args[0] == "init" {
+		return runInit(args[1:])
+	}
+
 	cfg, err := loadConfig()
 	if err != nil {
 		errMsg("loading config: %v", err)
@@ -135,6 +139,8 @@ func printHelp() {
 	fmt.Fprintln(w, "  --help, -h\tShow this help message.")
 	fmt.Fprintln(w, "  --version, -v\tShow the version of ccw.")
 	fmt.Fprintln(w, "  --list, -l\tList all available profiles.")
+	fmt.Fprintln(w, "  --dry-run\tPrint the resolved command and env vars without running claude.")
+	fmt.Fprintln(w, "  init\tCreate a starter config file.")
 	w.Flush()
 
 	fmt.Println()
